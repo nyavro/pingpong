@@ -3,6 +3,7 @@ package pingpong
 import akka.actor.{ActorSystem, Props}
 import akka.testkit.{ImplicitSender, TestKit}
 import org.scalatest._
+import scala.concurrent.duration._
 
 /**
  * Created by eny on 24.11.14.
@@ -11,8 +12,14 @@ class PingPongPlayerTest(_system: ActorSystem) extends TestKit(_system) with Fun
 
   def this() = this(ActorSystem("PostponeSpec"))
 
+  val N = 1.second
+  val B = 10.seconds
+  val M = 4
+  val K = 5
+  val G = 3
+
   test("starts pinging by GO! command") {
-    val playerA = system.actorOf(Props[PingPongPlayer])
+    val playerA = system.actorOf(PingPongPlayer.props(N, B, M, K, G))
     playerA ! ("GO!", self)
     expectMsg("ping")
     expectMsg("ping")
@@ -20,7 +27,7 @@ class PingPongPlayerTest(_system: ActorSystem) extends TestKit(_system) with Fun
   }
 
   test("after M pings player pongs") {
-    val ponging = system.actorOf(Props[PingPongPlayer])
+    val ponging = system.actorOf(PingPongPlayer.props(N, B, M, K, G))
     ponging ! "ping"
     ponging ! "ping"
     ponging ! "ping"
@@ -29,7 +36,7 @@ class PingPongPlayerTest(_system: ActorSystem) extends TestKit(_system) with Fun
   }
 
   test("after K pongs players switch") {
-    val player = system.actorOf(Props[PingPongPlayer])
+    val player = system.actorOf(PingPongPlayer.props(N, B, M, K, G))
     player ! ("GO!", self)  //player is pinger now
     player ! "pong"
     player ! "pong"
@@ -40,7 +47,7 @@ class PingPongPlayerTest(_system: ActorSystem) extends TestKit(_system) with Fun
   }
 
   test("after G cycles game finished") {
-    val player = system.actorOf(Props[PingPongPlayer])
+    val player = system.actorOf(PingPongPlayer.props(N, B, M, K, G))
   }
 
 }

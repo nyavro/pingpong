@@ -2,7 +2,7 @@ package pingpong
 
 import java.util.Date
 
-import akka.actor.{ActorRef, Actor}
+import akka.actor.{Props, ActorRef, Actor}
 import akka.actor.Actor.Receive
 import scala.concurrent.duration._
 
@@ -10,19 +10,23 @@ import scala.concurrent.duration._
  * Created by eny on 23.11.14.
  */
 
-class PingPongPlayer() extends Actor {
+object PingPongPlayer {
+  def props(
+    delayBetweenPings:Duration,
+    delayBetweenBreaks:Duration,
+    pingsToPong:Int,
+    pongsToSwitch:Int,
+    setsCount:Int) = Props(classOf[PingPongPlayer],
+      delayBetweenPings, delayBetweenBreaks, pingsToPong, pongsToSwitch
+  )
+}
 
-  val N = 1.second
-  val B = 10.seconds
-  val M = 4
-  val K = 5
-  val G = 3
-
-  val delayBetweenPings = N
-  val delayBetweenBreaks = B
-  val pingsToPong = M
-  val pongsToSwitch = K
-  val setsCount = G
+class PingPongPlayer(
+  val delayBetweenPings:Duration,
+  val delayBetweenBreaks:Duration,
+  val pingsToPong:Int,
+  val pongsToSwitch:Int,
+  val setsCount:Int) extends Actor {
 
   override def receive: Receive = ponging(0)
 
