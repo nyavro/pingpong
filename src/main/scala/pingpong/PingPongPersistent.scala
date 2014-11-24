@@ -27,10 +27,10 @@ case class Go(partner:ActorRef, setsLeft:Int) extends Command
 case class Start(pingsLeft:Int, partner:ActorRef, setsLeft:Int) extends Command
 
 class PingPongPersistent(
-                          val delayBetweenPings:Duration,
-                          val pingsToPong:Int,
-                          val pongsToSwitch:Int,
-                          val id:String) extends PersistentActor {
+    val delayBetweenPings:Duration,
+    val pingsToPong:Int,
+    val pongsToSwitch:Int,
+    val id:String) extends PersistentActor {
   override def persistenceId = id
 
   var pingsCount = 0
