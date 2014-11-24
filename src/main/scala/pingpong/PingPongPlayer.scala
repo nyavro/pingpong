@@ -2,13 +2,18 @@ package pingpong
 
 import java.util.Date
 
-import akka.actor.{Props, ActorRef, Actor}
-import akka.actor.Actor.Receive
+import akka.actor.{Actor, ActorRef, Props}
+
 import scala.concurrent.duration._
 
 /**
  * Created by eny on 23.11.14.
  */
+
+sealed trait Event
+class Round extends Event
+class Ping extends Event
+class Pong extends Event
 
 object PingPongPlayer {
   def props(
@@ -16,9 +21,10 @@ object PingPongPlayer {
     delayBetweenBreaks:Duration,
     pingsToPong:Int,
     pongsToSwitch:Int,
-    setsCount:Int) = Props(classOf[PingPongPlayer],
-      delayBetweenPings, delayBetweenBreaks, pingsToPong, pongsToSwitch
-  )
+    setsCount:Int) = Props(
+      classOf[PingPongPlayer],
+      delayBetweenPings, delayBetweenBreaks, pingsToPong, pongsToSwitch, setsCount
+    )
 }
 
 class PingPongPlayer(
@@ -28,7 +34,7 @@ class PingPongPlayer(
   val pongsToSwitch:Int,
   val setsCount:Int) extends Actor {
 
-  override def receive: Receive = ponging(0)
+  override def receive: Receive = ponging(0, 0)
 
   def pinging(round:Int, count:Int): Receive = {
     case ("start", partner:ActorRef) =>
@@ -37,34 +43,41 @@ class PingPongPlayer(
           Thread.sleep(delayBetweenPings.toMillis)
           partner ! "ping"
         } catch {
-          case e:InterruptedException => Thread.interrupted()
+          case e:InterruptedException => Thread.interrupted
         }
       }
     case "pong" =>
       val pongsReceived = count + 1
       if(pongsReceived >= pongsToSwitch) {
-        context become ponging(0)
-        sender ! "start"
+        context become ponging(round, 0)
+        sender ! ("GO!", self)
       } else {
         context become pinging(round, pongsReceived)
+        self !("start", sender())
       }
   }
   
-  def ponging(count:Int): Receive = {
+  def ponging(round:Int, count:Int): Receive = {
+    case "start" =>
+      context become pinging(round, 0)
+      self ! ("start", sender())
     case "ping" =>
       val pingsReceived = count + 1
       println(s"ping $pingsReceived received at: " + new Date)
       if (pingsReceived >= pingsToPong) {
         sender ! "pong"
-        context become ponging(0)
+        context become ponging(round, 0)
       } else {
-        context become ponging(pingsReceived)
+        context become ponging(round, pingsReceived)
       }
     case ("GO!", partner:ActorRef) =>
-      context become pinging(0, 0)
-      self ! ("start", partner)
-    case "start" =>
-      context become pinging(0, 0)
-      self ! ("start", sender())
+      val roundsCount = round + 1
+      if(roundsCount>setsCount) context.stop(self)
+      else {
+        context become pinging(roundsCount, 0)
+        self ! ("start", partner)
+      }
+    case "failure" =>
+      throw new RuntimeException("Failure during message receiving occured")
   }
 }

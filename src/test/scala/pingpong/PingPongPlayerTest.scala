@@ -1,8 +1,9 @@
 package pingpong
 
-import akka.actor.{ActorSystem, Props}
+import akka.actor.ActorSystem
 import akka.testkit.{ImplicitSender, TestKit}
 import org.scalatest._
+
 import scala.concurrent.duration._
 
 /**
@@ -12,7 +13,9 @@ class PingPongPlayerTest(_system: ActorSystem) extends TestKit(_system) with Fun
 
   def this() = this(ActorSystem("PostponeSpec"))
 
-  val N = 1.second
+  override def afterAll() = system.shutdown()
+
+  val N = 10.millisecond
   val B = 10.seconds
   val M = 4
   val K = 5
@@ -24,6 +27,8 @@ class PingPongPlayerTest(_system: ActorSystem) extends TestKit(_system) with Fun
     expectMsg("ping")
     expectMsg("ping")
     expectMsg("ping")
+    expectMsg("ping")
+    expectNoMsg()
   }
 
   test("after M pings player pongs") {
@@ -33,21 +38,48 @@ class PingPongPlayerTest(_system: ActorSystem) extends TestKit(_system) with Fun
     ponging ! "ping"
     ponging ! "ping"
     expectMsg("pong")
+    expectNoMsg()
   }
 
   test("after K pongs players switch") {
-    val player = system.actorOf(PingPongPlayer.props(N, B, M, K, G))
+    def expect(msg:Any, count:Int) = for(i<-1 to count) {expectMsg(msg)}
+    val player = system.actorOf(PingPongPlayer.props(N, B, M, 3, G))
     player ! ("GO!", self)  //player is pinger now
+    expect("ping",4)
     player ! "pong"
+    expect("ping",4)
     player ! "pong"
+    expect("ping",4)
     player ! "pong"
-    player ! "pong"
-    player ! "pong"
-    expectMsg("start")
+    expectMsg(("GO!", player))
+    expectNoMsg()
   }
 
-  test("after G cycles game finished") {
-    val player = system.actorOf(PingPongPlayer.props(N, B, M, K, G))
+  test("runs full cycle") {
+    val player = system.actorOf(PingPongPlayer.props(10.milliseconds, B, 2, 2, 1))
+    player ! ("GO!", self)
+    expectMsg("ping")
+    expectMsg("ping")
+    player ! "pong"
+    expectMsg("ping")
+    expectMsg("ping")
+    player ! "pong"
+    expectMsg(("GO!", player))
+    player ! "ping"
+    player ! "ping"
+    expectMsg("pong")
+    player ! "ping"
+    player ! "ping"
+    expectMsg("pong")
+    expectNoMsg()
   }
 
+  test("handles problem during ponging") {
+    val player = system.actorOf(PingPongPlayer.props(10.milliseconds, B, 2, 2, 1))
+    player ! "ping"
+    player ! "failure"
+    player ! "ping"
+    expectMsg("pong")
+    expectNoMsg()
+  }
 }
