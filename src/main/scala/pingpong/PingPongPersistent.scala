@@ -20,6 +20,7 @@ object PingPongPersistent {
 }
 
 sealed trait Command
+
 case class Ping(setsLeft:Int) extends Command
 case class Pong(setsLeft:Int) extends Command
 case class Go(partner:ActorRef, setsLeft:Int) extends Command
