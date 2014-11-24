@@ -10,10 +10,6 @@ import scala.concurrent.duration._
  * Created by eny on 23.11.14.
  */
 
-sealed trait Event
-class Round extends Event
-class Ping extends Event
-class Pong extends Event
 
 object PingPongPlayer {
   def props(

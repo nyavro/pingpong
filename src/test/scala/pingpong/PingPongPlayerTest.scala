@@ -74,7 +74,7 @@ class PingPongPlayerTest(_system: ActorSystem) extends TestKit(_system) with Fun
     expectNoMsg()
   }
 
-  test("handles problem during ponging") {
+  ignore("handles problem during ponging") {
     val player = system.actorOf(PingPongPlayer.props(10.milliseconds, B, 2, 2, 1))
     player ! "ping"
     player ! "failure"

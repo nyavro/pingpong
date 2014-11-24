@@ -1,6 +1,6 @@
 package pingpong
 
-import akka.actor.{Actor, ActorRef, Props}
+import akka.actor.{ActorRef, Props}
 import akka.persistence.PersistentActor
 
 import scala.concurrent.duration.Duration
@@ -11,56 +11,71 @@ import scala.concurrent.duration.Duration
 object PingPongPersistent {
   def props(
     delayBetweenPings:Duration,
-    delayBetweenBreaks:Duration,
     pingsToPong:Int,
     pongsToSwitch:Int,
-    setsCount:Int,
     id:String) = Props(
       classOf[PingPongPersistent],
-      delayBetweenPings, delayBetweenBreaks, pingsToPong, pongsToSwitch, setsCount, id
+      delayBetweenPings, pingsToPong, pongsToSwitch, id
     )
 }
 
-case class State(pings:Int, pongs:Int, rounds:Int)
+sealed trait Command
+case class Ping(setsLeft:Int) extends Command
+case class Pong(setsLeft:Int) extends Command
+case class Go(partner:ActorRef, setsLeft:Int) extends Command
+case class Start(pingsLeft:Int, partner:ActorRef, setsLeft:Int) extends Command
 
 class PingPongPersistent(
   val delayBetweenPings:Duration,
-  val delayBetweenBreaks:Duration,
   val pingsToPong:Int,
   val pongsToSwitch:Int,
-  val setsCount:Int,
   val id:String) extends PersistentActor {
   override def persistenceId = id
 
   var pingsCount = 0
   var pongsCount = 0
-  var roundsCount = 0
+  var ponging = false
 
   def receiveCommand: Receive = {
-    case "failure"  => throw new Exception("failure")
+    case "failure"  =>
+      if(ponging) {
+        sender ! "failure emulated"
+        throw new Exception("failure")
+      }
     case msg:Any =>
       persist(msg) {
-        case "ping" => pingsCount += 1
+        case Ping(setsLeft:Int) =>
+          ponging = true
+          pingsCount += 1
+          println(s"${self.path.name}: Ping($pingsCount)")
           if(pingsCount>=pingsToPong) {
             pingsCount = 0
-            sender ! "pong"
+            ponging = false
+            sender ! Pong(setsLeft)
           }
-        case "pong" =>
+        case Pong(setsLeft:Int) =>
           pongsCount += 1
+          println(s"${self.path.name}: Pong($pongsCount)")
           if(pongsCount>=pongsToSwitch) {
             pongsCount = 0
-            sender ! ("GO!", self)
+            sender ! Go(self, setsLeft-1)
           }
-          else self !("start", sender())
-        case ("GO!", partner:ActorRef) =>
-          roundsCount += 1
-          if (roundsCount > setsCount) context.stop(self)
-          else self !("start", partner)
-        case ("start", partner:ActorRef) =>
-          for(i<-1 to pingsToPong) {
+          else self ! Start(pingsToPong, sender(), setsLeft)
+        case Go(partner:ActorRef, setsLeft:Int) =>
+          if(setsLeft>0) {
+            println(s"${self.path.name}: It is mine turn to ping!")
+            self ! Start(pingsToPong, partner, setsLeft)
+          } else {
+            println(s"PingPong finished")
+            context.stop(self)
+            context.stop(sender())
+          }
+        case Start(pingsLeft:Int, partner:ActorRef, setsLeft:Int) =>
+          if(pingsLeft>0) {
             try {
               Thread.sleep(delayBetweenPings.toMillis)
-              partner ! "ping"
+              partner ! Ping(setsLeft)
+              self ! Start(pingsLeft-1, partner, setsLeft)
             } catch {
               case e:InterruptedException => Thread.interrupted
             }
@@ -68,7 +83,8 @@ class PingPongPersistent(
       }
   }
 
-  def receiveRecover: Actor.Receive = {
-    case "ping" => pingsCount += 1
+  def receiveRecover: Receive = {
+    case Ping(s:Int) => pingsCount = (pingsCount + 1) % pingsToPong
+    case Pong(s:Int) => pongsCount = (pongsCount + 1) % pongsToSwitch
   }
 }
