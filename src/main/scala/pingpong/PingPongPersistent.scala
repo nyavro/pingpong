@@ -19,12 +19,14 @@ object PingPongPersistent {
   )
 }
 
+case class State(setsLeft:Int, supervisor:ActorRef)
+
 sealed trait Command
 
-case class Ping(setsLeft:Int) extends Command
-case class Pong(setsLeft:Int) extends Command
-case class Go(partner:ActorRef, setsLeft:Int) extends Command
-case class Start(pingsLeft:Int, partner:ActorRef, setsLeft:Int) extends Command
+case class Ping(state:State) extends Command
+case class Pong(state:State) extends Command
+case class Go(partner:ActorRef, state:State) extends Command
+case class Start(pingsLeft:Int, partner:ActorRef, state:State) extends Command
 
 class PingPongPersistent(
     val delayBetweenPings:Duration,
@@ -45,7 +47,7 @@ class PingPongPersistent(
       }
     case msg:Any =>
       persist(msg) {
-        case Ping(setsLeft:Int) =>
+        case Ping(setsLeft:State) =>
           ponging = true
           pingsCount += 1
           println(s"${self.path.name}: Ping($pingsCount)")
@@ -54,24 +56,23 @@ class PingPongPersistent(
             ponging = false
             sender ! Pong(setsLeft)
           }
-        case Pong(setsLeft:Int) =>
+        case Pong(state:State) =>
           pongsCount += 1
           println(s"${self.path.name}: Pong($pongsCount)")
           if(pongsCount>=pongsToSwitch) {
             pongsCount = 0
-            sender ! Go(self, setsLeft-1)
+            sender ! Go(self, State(state.setsLeft-1, state.supervisor))
           }
-          else self ! Start(pingsToPong, sender(), setsLeft)
-        case Go(partner:ActorRef, setsLeft:Int) =>
-          if(setsLeft>0) {
+          else self ! Start(pingsToPong, sender(), state)
+        case Go(partner:ActorRef, state:State) =>
+          if(state.setsLeft>0) {
             println(s"${self.path.name}: It is mine turn to ping!")
-            self ! Start(pingsToPong, partner, setsLeft)
+            self ! Start(pingsToPong, partner, state)
           } else {
             println(s"PingPong finished")
-            context.stop(self)
-            context.stop(sender())
+            state.supervisor ! "Finished"
           }
-        case Start(pingsLeft:Int, partner:ActorRef, setsLeft:Int) =>
+        case Start(pingsLeft:Int, partner:ActorRef, setsLeft:State) =>
           if(pingsLeft>0) {
             try {
               Thread.sleep(delayBetweenPings.toMillis)
@@ -85,7 +86,7 @@ class PingPongPersistent(
   }
 
   def receiveRecover: Receive = {
-    case Ping(s:Int) => pingsCount = (pingsCount + 1) % pingsToPong
-    case Pong(s:Int) => pongsCount = (pongsCount + 1) % pongsToSwitch
+    case Ping(s:State) => pingsCount = (pingsCount + 1) % pingsToPong
+    case Pong(s:State) => pongsCount = (pongsCount + 1) % pongsToSwitch
   }
 }

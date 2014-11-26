@@ -1,6 +1,6 @@
 package pingpong
 
-import akka.actor.{Actor, ActorRef, ActorSystem, Props}
+import akka.actor._
 
 import scala.concurrent.duration._
 
@@ -22,6 +22,16 @@ class Breaking(delayBetweenBreaks:Duration, playerA:ActorRef, playerB:ActorRef) 
     case "stop" =>
       println("stopping Breaking actor")
       context.stop(self)
+      context.stop(playerA)
+      context.stop(playerB)
+  }
+}
+
+class Supervisor(break:ActorRef) extends Actor {
+  override def receive: Receive = {
+  case "Finished" =>
+    break ! "stop"
+    context.system.shutdown()
   }
 }
 
@@ -51,10 +61,7 @@ object PingPongApp extends App {
     "playerB"
   )
   val break = system.actorOf(Props(classOf[Breaking], DelayBetweenBreaks, playerA, playerB))
-  playerA ! Go(playerB, SetsCount)
+  val supervisor = system.actorOf(Props(classOf[Supervisor], break))
+  playerA ! Go(playerB, State(SetsCount, supervisor))
   break ! "start"
-  Thread.sleep(10000)
-  break ! "stop"
-  system.shutdown()
-  println("finished")
 }
